@@ -1,9 +1,13 @@
 import React, { useState } from "react";
 import Add from "../img/addAvatar.png";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-
 import { auth, db, storage } from "../firebase";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import {
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  getStorage,
+} from "firebase/storage";
 import { doc, setDoc } from "firebase/firestore";
 import { useNavigate, Link } from "react-router-dom";
 
@@ -13,7 +17,6 @@ const Register = () => {
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    setLoading(true);
     e.preventDefault();
     const displayName = e.target[0].value;
     const email = e.target[1].value;
@@ -21,41 +24,51 @@ const Register = () => {
     const file = e.target[3].files[0];
 
     try {
-      //Create user
+      setLoading(true);
+      // Create user
       const res = await createUserWithEmailAndPassword(auth, email, password);
 
-      //Create a unique image name
+      // Create a unique image name
       const date = new Date().getTime();
-      const storageRef = ref(storage, `${displayName + date}`);
+      const fileName = `${displayName}-${date}`;
 
-      await uploadBytesResumable(storageRef, file).then(() => {
-        getDownloadURL(storageRef).then(async (downloadURL) => {
-          try {
-            //Update profile
-            await updateProfile(res.user, {
-              displayName,
-              photoURL: downloadURL,
-            });
-            //create user on firestore
-            await setDoc(doc(db, "users", res.user.uid), {
-              uid: res.user.uid,
-              displayName,
-              email,
-              photoURL: downloadURL,
-            });
+      // Upload the file to Firebase Storage
+      const storageRef = ref(storage, fileName);
+      const storageInstance = getStorage();
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      await new Promise((resolve, reject) => {
+        uploadTask.on("state_changed", null, reject, () => {
+          // Get the download URL
+          getDownloadURL(storageRef)
+            .then(async (downloadURL) => {
+              // Update user profile
+              await updateProfile(res.user, {
+                displayName,
+                photoURL: downloadURL,
+              });
 
-            //create empty user chats on firestore
-            await setDoc(doc(db, "userChats", res.user.uid), {});
-            navigate("/");
-          } catch (err) {
-            console.log(err);
-            setErr(true);
-            setLoading(false);
-          }
+              // Create user document in Firestore
+              await setDoc(doc(db, "users", res.user.uid), {
+                uid: res.user.uid,
+                displayName,
+                email,
+                photoURL: downloadURL,
+              });
+
+              // Create empty user chats in Firestore
+              await setDoc(doc(db, "userChats", res.user.uid), {});
+
+              resolve();
+            })
+            .catch(reject);
         });
       });
-    } catch (err) {
+
+      navigate("/");
+    } catch (error) {
+      console.log(error);
       setErr(true);
+    } finally {
       setLoading(false);
     }
   };
@@ -69,17 +82,23 @@ const Register = () => {
           <input required type="text" placeholder="display name" />
           <input required type="email" placeholder="email" />
           <input required type="password" placeholder="password" />
-          <input required style={{ display: "none" }} type="file" id="file" />
+          <input
+            required
+            style={{ display: "none" }}
+            type="file"
+            id="file"
+            accept="image/*"
+          />
           <label htmlFor="file">
             <img src={Add} alt="" />
             <span>Add an avatar</span>
           </label>
           <button disabled={loading}>Sign up</button>
-          {loading && "Uploading and compressing the image please wait..."}
+          {loading && "Uploading and compressing the image, please wait..."}
           {err && <span>Something went wrong</span>}
         </form>
         <p>
-          You do have an account? <Link to="/register">Login</Link>
+          Already have an account? <Link to="/login">Login</Link>
         </p>
       </div>
     </div>
