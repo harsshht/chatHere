@@ -4,7 +4,8 @@
 This is a simple chat app that allows users to communicate with each other in real-time. It uses a client-server architecture where multiple clients can connect to a central server to send and receive messages.
 
 
-Live Link : https://chathereapp.netlify.app/login
+Live Link : https://chat-here-eta.vercel.app
+
 
 ## Screenshots
 
